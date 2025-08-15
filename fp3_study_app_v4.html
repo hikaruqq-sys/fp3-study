@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f172a"/>
+<title>FP3級 Studyモード v4（効果音 + ゲーム要素 + 分析）</title>
+<style>
+  :root { --bg:#0f172a; --fg:#e5e7eb; --muted:#94a3b8; --accent:#22c55e; --warn:#f59e0b; --err:#ef4444; --card:#111827; --line:#1f2937; }
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", "Meiryo", sans-serif;}
+  header{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  h1{font-size:18px;margin:0}
+  .pill{border:1px solid #334155;padding:6px 10px;border-radius:999px;font-size:12px;color:var(--muted)}
+  main{padding:16px;max-width:1280px;margin:0 auto}
+  .grid{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+  label{font-size:12px;color:var(--muted)}
+  select,input[type="number"],textarea{width:100%;padding:10px;border-radius:10px;background:#0b1220;border:1px solid var(--line);color:#e5e7eb}
+  input[type="range"]{width:100%}
+  button{background:#1f2937;border:1px solid #334155;color:#e5e7eb;border-radius:10px;padding:10px 14px;cursor:pointer}
+  button.primary{background:linear-gradient(180deg, #16a34a, #15803d);border-color:#14532d}
+  button.ghost{background:transparent;border-color:#334155;color:#cbd5e1}
+  .question{font-size:18px;margin:8px 0 12px}
+  .choices{display:grid;gap:10px}
+  .choice{background:#0b1220;border:1px solid var(--line);border-radius:12px;padding:10px;cursor:pointer;text-align:left}
+  .choice.correct{border-color:#166534;box-shadow:0 0 0 1px #166534 inset}
+  .choice.wrong{border-color:#7f1d1d;box-shadow:0 0 0 1px #7f1d1d inset}
+  .explain{margin-top:10px;padding:10px;border:1px dashed #334155;border-radius:10px;color:#cbd5e1;background:#0b1220;display:none}
+  .meta{font-size:12px;color:#94a3b8;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .stats{display:flex;gap:8px;align-items:center;font-size:12px;color:#cbd5e1}
+  .badge{padding:2px 8px;border-radius:999px;border:1px solid #334155;background:#0b1220}
+  .timer{font-variant-numeric:tabular-nums;font-size:20px;color:#fef08a}
+  .hr{height:1px;background:var(--line);margin:12px 0}
+  .flex{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .grow{flex:1}
+  details summary{cursor:pointer;color:#cbd5e1}
+  textarea{min-height:80px}
+  .small{font-size:12px;color:#94a3b8}
+  .bar{height:10px;background:#0b1220;border:1px solid #334155;border-radius:999px;overflow:hidden}
+  .bar>span{display:block;height:100%;background:#22c55e}
+  .kpi{display:flex;gap:12px;flex-wrap:wrap}
+  .kpi .tile{background:#0b1220;border:1px solid #334155;border-radius:10px;padding:10px 12px}
+  .tile b{font-size:18px}
+  .game{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .xpbar{height:12px;background:#0b1220;border:1px solid #334155;border-radius:999px;overflow:hidden}
+  .xpbar>span{display:block;height:100%;background:linear-gradient(90deg,#22c55e,#84cc16)}
+  .badgeUI{display:flex;gap:8px;flex-wrap:wrap}
+  .bchip{border:1px dashed #334155;border-radius:999px;padding:6px 10px;font-size:12px;color:#cbd5e1;opacity:.7}
+  .bchip.unlocked{border-style:solid;opacity:1}
+  .coin{color:#fde68a}
+</style>
+</head>
+<body>
+  <header>
+    <h1>FP3級 Studyモード v4</h1>
+    <div class="pill">🎮 ゲーム / 効果音</div>
+    <div class="pill">📈 進捗・日次KPI・計画バー</div>
+    <div class="pill">🧠 復習（Leitner）</div>
+    <div class="pill">📦 エクスポート（JSON/CSV）</div>
+    <div class="pill">📱 PWA & オフライン</div>
+  </header>
+  <main class="grid">
+    <section class="card">
+      <div class="meta">
+        <span>モード:</span>
+        <select id="mode">
+          <option value="study">スタディ（一問一答・即解説）</option>
+          <option value="quiz">クイズ（指定数→最後に採点）</option>
+          <option value="due">復習（期限優先）</option>
+        </select>
+        <span>分野:</span>
+        <select id="field">
+          <option value="all">全分野</option>
+        </select>
+        <span>出題数:</span>
+        <input id="count" type="number" min="1" max="100" value="10" style="width:80px">
+        <div class="grow"></div>
+        <div class="timer" id="timer">15:00</div>
+        <button id="startTimer" class="ghost">⏱️開始</button>
+        <button id="resetTimer" class="ghost">リセット</button>
+      </div>
+      <div class="hr"></div>
+
+      <div class="game">
+        <div>レベル <b id="level">1</b></div>
+        <div style="min-width:160px;flex:1">
+          <div class="xpbar"><span id="xpbar" style="width:0%"></span></div>
+          <div class="small"><span id="xp">0</span>/<span id="xpNeed">100</span> XP</div>
+        </div>
+        <div class="badge coin">🪙 <b id="coins">0</b></div>
+        <div class="badge">🔥 連続正解 <b id="combo">0</b>x</div>
+        <div class="badge">📅 デイリーストリーク <b id="dStreak">0</b>日</div>
+        <div class="grow"></div>
+        <div style="min-width:220px">
+          <div class="small">🔊 効果音</div>
+          <div class="flex">
+            <label><input type="checkbox" id="sndEnable" checked> 有効</label>
+            <input type="range" id="sndVol" min="0" max="100" value="70">
+          </div>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+      <div id="qaArea">
+        <div class="meta">
+          <span class="badge" id="qMeta"></span>
+          <div class="stats">
+            <span>正解:<b id="statCorrect">0</b></span>
+            <span>不正解:<b id="statWrong">0</b></span>
+            <span>連続正解:<b id="statStreak">0</b></span>
+          </div>
+          <div class="grow"></div>
+          <div class="stats">
+            <span>今日の問数:<b id="todayCount">0</b>/<b id="todayTarget">15</b></span>
+            <span>今日の正答率:<b id="todayRate">-</b></span>
+          </div>
+        </div>
+        <div class="bar" title="今日の達成度"><span id="todayBar" style="width:0%"></span></div>
+        <div class="hr"></div>
+        <div class="question" id="question">「開始」を押すと出題します。</div>
+        <div class="choices" id="choices"></div>
+        <div class="explain" id="explain"></div>
+        <div class="flex" style="margin-top:10px">
+          <button id="action" class="primary">▶ 出題開始</button>
+          <button id="skip" class="ghost">スキップ</button>
+          <button id="showExp" class="ghost">解説を表示</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="card">
+      <h3 style="margin-top:0">📈 進捗ダッシュボード</h3>
+      <div class="kpi">
+        <div class="tile"><div class="small">総解答数</div><b id="kpi_total">0</b></div>
+        <div class="tile"><div class="small">総正答率</div><b id="kpi_rate">-</b></div>
+        <div class="tile"><div class="small">復習期限切れ</div><b id="kpi_due">0</b></div>
+      </div>
+      <div class="hr"></div>
+
+      <label>日次目標（問）</label>
+      <input id="dailyTarget" type="number" min="5" max="200" value="15">
+      <div class="small">平日15分なら10〜20問が目安</div>
+      <div class="hr"></div>
+
+      <h4 style="margin:0 0 8px">🗓 計画達成度（週単位）</h4>
+      <div id="planBox" class="small"></div>
+      <div class="hr"></div>
+
+      <h4 style="margin:0 8px 8px 0">🏅 バッジ</h4>
+      <div class="badgeUI" id="badges"></div>
+      <div class="hr"></div>
+
+      <h4 style="margin:0 0 8px">🧠 復習スケジュール（Leitner箱）</h4>
+      <div class="small">箱1（毎日）/ 箱2（2日）/ 箱3（4日）/ 箱4（8日）/ 箱5（16日）</div>
+      <div id="leitnerBox" class="small"></div>
+
+      <div class="hr"></div>
+      <div class="flex">
+        <button id="exportJSON">JSONエクスポート</button>
+        <button id="exportCSV">CSVエクスポート</button>
+        <button id="importBtn">JSONインポート</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none">
+        <button id="resetStats" class="ghost">成績リセット</button>
+      </div>
+      <div class="small">※エクスポートしたJSON/CSVをChatGPTに読み込ませれば、間違い傾向の分析が可能です。</div>
+    </aside>
+
+    <section class="card" style="grid-column:1 / -1">
+      <h3 style="margin-top:0">📝 オリジナル問題を追加</h3>
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <label>分野</label>
+          <select id="newField"></select>
+        </div>
+        <div>
+          <label>正解の番号（1始まり）</label>
+          <input id="newAnswer" type="number" min="1" value="1">
+        </div>
+        <div style="grid-column:1/-1">
+          <label>問題文</label>
+          <textarea id="newQ"></textarea>
+        </div>
+        <div>
+          <label>選択肢（改行区切り）</label>
+          <textarea id="newChoices" placeholder="A\nB\nC\nD"></textarea>
+        </div>
+        <div>
+          <label>解説</label>
+          <textarea id="newExp"></textarea>
+        </div>
+      </div>
+      <div class="flex" style="margin-top:8px">
+        <button id="addQ" class="primary">追加</button>
+      </div>
+    </section>
+  </main>
+
+<script>
+/* Keys */
+const STORAGE_KEY = "fp3_study_state_v4";
+const BANK_KEY    = "fp3_question_bank_v4";
+const LOG_KEY     = "fp3_daily_log_v4";
+const ATTEMPT_KEY = "fp3_attempt_log_v4";
+
+/* 初期問題（簡易） */
+const defaultQuestions = [
+  {id:"LP1", field:"ライフプランニング", q:"公的年金のうち、自営業者などが加入する基礎的な年金はどれ？", choices:["厚生年金保険","国民年金","共済年金","企業年金"], a:1, exp:"20〜60歳の全国民が基礎年金として加入。"},
+  {id:"RK1", field:"リスク管理", q:"終身保険の主な特徴として正しいものは？", choices:["一定期間のみ保障","一生涯の死亡保障が続く","満期保険金が必ず出る","解約返戻金がない"], a:1, exp:"満期はなく、一生涯の死亡保障。"},
+  {id:"FA1", field:"金融資産運用", q:"債券価格に影響が大きいのは？", choices:["市場金利","為替固定","配当性向","株主構成"], a:0, exp:"金利上昇→既発債価格は下落。"},
+  {id:"TX1", field:"タックスプランニング", q:"給与所得者に適用されるのは？", choices:["事業所得控除","給与所得控除","不動産所得控除","退職所得控除"], a:1, exp:"給与収入−給与所得控除＝給与所得。"},
+  {id:"RE1", field:"不動産", q:"不動産の対抗要件として必要なのは？", choices:["契約書","印紙","登記","評価証明書"], a:2, exp:"所有権移転を第三者に対抗するには登記が必要。"},
+  {id:"IN1", field:"相続・事業承継", q:"配偶者と子1人の法定相続分は？", choices:["配偶者1/2 子1/2","配偶者2/3 子1/3","配偶者1/3 子2/3","配偶者のみ"], a:0, exp:"子が複数なら子の1/2を等分。"},
+];
+
+/* 週次計画 */
+const plan = [
+  {from:"2025-08-18", to:"2025-08-24", field:"ライフプランニング"},
+  {from:"2025-08-25", to:"2025-08-31", field:"リスク管理"},
+  {from:"2025-09-01", to:"2025-09-07", field:"金融資産運用"},
+  {from:"2025-09-08", to:"2025-09-14", field:"タックスプランニング"},
+  {from:"2025-09-15", to:"2025-09-21", field:"不動産"},
+  {from:"2025-09-22", to:"2025-09-30", field:"相続・事業承継"},
+  {from:"2025-10-01", to:"2025-10-31", field:"全分野（演習）"},
+  {from:"2025-11-01", to:"2025-11-30", field:"全分野（演習）"},
+  {from:"2025-12-01", to:"2025-12-14", field:"苦手分野 強化"},
+  {from:"2025-12-15", to:"2025-12-21", field:"本番形式 模試"},
+  {from:"2025-12-22", to:"2025-12-26", field:"総仕上げ"},
+];
+
+/* 状態・ログ */
+let state = {
+  correct:0, wrong:0, streak:0,
+  box:{}, next:{},
+  level:1, xp:0, coins:0, combo:0, dailyStreak:0, lastActive:"",
+  badges:{ rookie:false, tenDay:false, hundredQs:false, noMiss10:false },
+  sndEnable:true, sndVol:0.7
+};
+let bank = [];
+let dailyLog = {};
+let attempts = [];
+
+/* Utils */
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function uniqFields(list){ return Array.from(new Set(list.map(x=>x.field))); }
+function filterByField(list, field){ return field==='all' ? list : list.filter(x=>x.field===field); }
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
+function inRange(d, from, to){ const x=new Date(d), a=new Date(from), b=new Date(to); return x>=a && x<=b; }
+
+/* Save/Load */
+function loadAll(){
+  try{ state = Object.assign(state, JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}")); }catch(e){}
+  try{
+    bank = JSON.parse(localStorage.getItem(BANK_KEY)||"[]");
+    if(!bank.length){ bank = defaultQuestions.slice(); saveBank(); }
+  }catch(e){ bank = defaultQuestions.slice(); saveBank(); }
+  try{ dailyLog = JSON.parse(localStorage.getItem(LOG_KEY)||"{}"); }catch(e){ dailyLog={}; }
+  try{ attempts = JSON.parse(localStorage.getItem(ATTEMPT_KEY)||"[]"); }catch(e){ attempts=[]; }
+}
+function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function saveBank(){ localStorage.setItem(BANK_KEY, JSON.stringify(bank)); }
+function saveLog(){ localStorage.setItem(LOG_KEY, JSON.stringify(dailyLog)); }
+function saveAttempts(){ localStorage.setItem(ATTEMPT_KEY, JSON.stringify(attempts)); }
+
+/* Leitner */
+const intervals = {1:1,2:2,3:4,4:8,5:16};
+function scheduleNext(id, isCorrect){
+  const cur = state.box[id] || 1;
+  const nextBox = isCorrect ? Math.min(cur+1,5) : 1;
+  state.box[id] = nextBox;
+  const d = new Date(); d.setDate(d.getDate() + (intervals[nextBox]||1));
+  state.next[id] = d.toISOString().slice(0,10);
+  saveState();
+}
+function dueIds(){
+  const t = todayStr();
+  return bank.map(q=>q.id).filter(id=>{
+    const due = state.next[id];
+    return !due || due <= t;
+  });
+}
+
+/* Gamification */
+function gainXP(amount){
+  const comboBonus = 1 + (state.combo*0.05);
+  const xpGain = Math.round(amount * comboBonus);
+  state.xp += xpGain;
+  state.coins += Math.max(1, Math.round(xpGain/5));
+  let need = 100 + 20*(state.level-1);
+  let leveled = false;
+  while(state.xp >= need){
+    state.xp -= need;
+    state.level++;
+    need = 100 + 20*(state.level-1);
+    leveled = true;
+  }
+  saveState();
+  renderGame();
+  if(leveled){ playSnd('level'); toast(`レベル ${state.level} にアップ！`); }
+}
+
+/* Daily streak */
+function updateDailyStreak(){
+  const t = todayStr();
+  if(!state.lastActive){ state.dailyStreak = 1; }
+  else{
+    const last = new Date(state.lastActive);
+    const today = new Date(t);
+    const diff = Math.round((today-last)/(1000*60*60*24));
+    if(diff===1) state.dailyStreak += 1;
+    else if(diff>1) state.dailyStreak = 1;
+  }
+  state.lastActive = t;
+  saveState(); renderGame();
+}
+
+/* Badges */
+function checkBadges(){
+  const total = state.correct + state.wrong;
+  if(!state.badges.rookie && total>=10){ state.badges.rookie=true; playSnd('badge'); toast("🎉 バッジ：Rookie（10問）"); }
+  if(!state.badges.hundredQs && total>=100){ state.badges.hundredQs=true; playSnd('badge'); toast("🎉 バッジ：100問突破"); }
+  if(!state.badges.tenDay && state.dailyStreak>=10){ state.badges.tenDay=true; playSnd('badge'); toast("🎉 バッジ：10日連続"); }
+  if(!state.badges.noMiss10 && state.streak>=10){ state.badges.noMiss10=true; playSnd('badge'); toast("🎉 バッジ：ノーミス10連"); }
+  saveState(); renderBadges();
+}
+
+/* Sounds via WebAudio (no external files) */
+let audioCtx = null;
+function ensureAudio(){
+  if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+function tone(freq=440, time=0.12, type='sine', gain=0.2){
+  ensureAudio();
+  const vol = (state.sndEnable?1:0) * (state.sndVol||0.7);
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.value = 0;
+  o.connect(g); g.connect(audioCtx.destination);
+  const now = audioCtx.currentTime;
+  g.gain.linearRampToValueAtTime(gain*vol, now+0.01);
+  g.gain.exponentialRampToValueAtTime(0.001, now+time);
+  o.start(); o.stop(now+time+0.02);
+}
+function playSnd(kind){
+  if(!state.sndEnable) return;
+  if(kind==='correct'){ tone(880,0.12,'sine',0.3); setTimeout(()=>tone(1175,0.09,'sine',0.25),100); }
+  else if(kind==='wrong'){ tone(220,0.14,'sawtooth',0.25); setTimeout(()=>tone(196,0.12,'sawtooth',0.2),120); }
+  else if(kind==='level'){ tone(523,0.1,'triangle',0.25); setTimeout(()=>tone(659,0.1,'triangle',0.25),100); setTimeout(()=>tone(784,0.18,'triangle',0.3),200); }
+  else if(kind==='badge'){ tone(740,0.12,'square',0.2); setTimeout(()=>tone(988,0.12,'square',0.2),120); setTimeout(()=>tone(1319,0.14,'square',0.22),240); }
+  else if(kind==='click'){ tone(660,0.05,'square',0.15); }
+}
+
+/* UI: badges, game */
+function renderBadges(){
+  const b = state.badges;
+  document.getElementById('badges').innerHTML = [
+    {k:'rookie', label:'Rookie（10問）'},
+    {k:'hundredQs', label:'100問突破'},
+    {k:'tenDay', label:'10日連続'},
+    {k:'noMiss10', label:'ノーミス10連'}
+  ].map(x=>`<div class="bchip ${b[x.k]?'unlocked':''}">${b[x.k]?'🏅':''} ${x.label}</div>`).join('');
+}
+function renderGame(){
+  document.getElementById('level').textContent = state.level;
+  const need = 100 + 20*(state.level-1);
+  document.getElementById('xp').textContent = state.xp;
+  document.getElementById('xpNeed').textContent = need;
+  document.getElementById('xpbar').style.width = Math.min(100, Math.round(100*state.xp/need)) + '%';
+  document.getElementById('coins').textContent = state.coins;
+  document.getElementById('combo').textContent = state.combo;
+  document.getElementById('dStreak').textContent = state.dailyStreak;
+  document.getElementById('sndEnable').checked = !!state.sndEnable;
+  document.getElementById('sndVol').value = Math.round((state.sndVol||0.7)*100);
+}
+
+/* Toast */
+let toastTimer=null;
+function toast(msg){
+  let t = document.getElementById('toast');
+  if(!t){
+    t = document.createElement('div');
+    t.id='toast';
+    t.style.position='fixed'; t.style.bottom='20px'; t.style.left='50%';
+    t.style.transform='translateX(-50%)'; t.style.background='#111827'; t.style.border='1px solid #334155';
+    t.style.padding='10px 14px'; t.style.borderRadius='10px'; t.style.zIndex='9999'; t.style.color='#e5e7eb';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg; t.style.opacity='1';
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{ t.style.opacity='0'; }, 1800);
+}
+
+/* 出題管理 */
+let queue=[], cursor=-1;
+function renderSelectors(){
+  const fieldSel = document.getElementById('field');
+  fieldSel.innerHTML = `<option value="all">全分野</option>` + uniqFields(bank).map(f=>`<option value="${f}">${f}</option>`).join('');
+  document.getElementById('newField').innerHTML = uniqFields(bank).map(f=>`<option value="${f}">${f}</option>`).join('');
+}
+function prepareQueue(mode, fld, n){
+  let items = filterByField(bank, fld);
+  if(mode==='due'){
+    const dset = new Set(dueIds());
+    items = items.filter(x=>dset.has(x.id));
+    if(!items.length){ toast("復習対象がありません。スタディ/クイズで新規学習をどうぞ。"); }
+  }
+  items = shuffle(items.slice());
+  queue = items.slice(0, n);
+  cursor=-1;
+}
+function renderLeitner(){
+  const box = document.getElementById('leitnerBox');
+  const counts = {1:0,2:0,3:0,4:0,5:0};
+  Object.values(state.box).forEach(b=>{ counts[b]=(counts[b]||0)+1; });
+  box.innerHTML = [1,2,3,4,5].map(i=>`箱${i}: ${counts[i]||0}問（間隔${intervals[i]}日）`).join("<br>");
+}
+function renderPlanProgress(){
+  const box = document.getElementById('planBox');
+  const weeklyTarget = 50;
+  const items = [];
+  for (const w of plan){
+    let answered = 0;
+    for (const [d, rec] of Object.entries(dailyLog)){
+      if(inRange(d, w.from, w.to)){ answered += (rec.answered||0); }
+    }
+    const pct = Math.min(100, Math.round(100*answered/weeklyTarget));
+    items.push(`<div style="margin:8px 0">
+      <div><b>${w.from}〜${w.to}</b>：<span>${w.field}</span></div>
+      <div class="bar"><span style="width:${pct}%"></span></div>
+      <div class="small">${answered}/${weeklyTarget} 問</div>
+    </div>`);
+  }
+  box.innerHTML = items.join("");
+}
+
+/* 画面右上の統計 */
+function showStats(){
+  document.getElementById('statCorrect').textContent = state.correct;
+  document.getElementById('statWrong').textContent = state.wrong;
+  document.getElementById('statStreak').textContent = state.streak;
+  const t = todayStr();
+  const rec = dailyLog[t] || {answered:0, correct:0};
+  const target = parseInt(document.getElementById('dailyTarget').value || '15');
+  document.getElementById('todayCount').textContent = rec.answered;
+  document.getElementById('todayTarget').textContent = target;
+  document.getElementById('todayRate').textContent = rec.answered ? Math.round(100*rec.correct/rec.answered)+'%' : '-';
+  document.getElementById('todayBar').style.width = Math.min(100, Math.round(100*rec.answered/target)) + '%';
+  const total = state.correct + state.wrong;
+  document.getElementById('kpi_total').textContent = total;
+  document.getElementById('kpi_rate').textContent = total ? Math.round(100*state.correct/total)+'%' : '-';
+  document.getElementById('kpi_due').textContent = dueIds().length;
+  renderPlanProgress();
+  renderLeitner();
+  renderGame();
+  renderBadges();
+}
+
+/* 出題と採点 */
+function renderQuestion(){
+  const item = queue[cursor];
+  const qMeta = document.getElementById('qMeta');
+  const questionEl = document.getElementById('question');
+  const choicesEl = document.getElementById('choices');
+  const explainEl = document.getElementById('explain');
+  if(!item){ questionEl.textContent='出題がありません。'; choicesEl.innerHTML=''; return; }
+  qMeta.textContent = `${item.field} ／ ${cursor+1} / ${queue.length}`;
+  questionEl.textContent = item.q;
+  choicesEl.innerHTML='';
+  item.choices.forEach((c,idx)=>{
+    const btn = document.createElement('button');
+    btn.className='choice';
+    btn.innerHTML = `<b>${idx+1}.</b> ${c}`;
+    btn.onclick = ()=>checkAnswer(idx);
+    choicesEl.appendChild(btn);
+  });
+  explainEl.textContent = item.exp || '解説は未登録です。';
+  explainEl.style.display='none';
+  document.getElementById('showExp').disabled = false;
+}
+function nextQuestion(){
+  cursor++;
+  const actionBtn = document.getElementById('action');
+  if(cursor>=queue.length){
+    document.getElementById('question').textContent = '完了！お疲れさまでした。';
+    document.getElementById('choices').innerHTML = '';
+    document.getElementById('explain').style.display='none';
+    actionBtn.textContent = '▶ もう一度';
+    showStats(); return;
+  }
+  renderQuestion();
+  actionBtn.textContent = '次へ';
+}
+
+function logAttempt(obj){
+  attempts.push(obj);
+  if(attempts.length>8000){ attempts.shift(); }
+  saveAttempts();
+}
+
+function checkAnswer(idx){
+  const item = queue[cursor];
+  const nodes = Array.from(document.querySelectorAll('.choice'));
+  nodes.forEach((n,i)=>{
+    if(i===item.a){ n.classList.add('correct'); }
+    if(i===idx && idx!==item.a){ n.classList.add('wrong'); }
+    n.disabled = true;
+  });
+  const isCorrect = (idx===item.a);
+  if(isCorrect){ state.correct++; state.streak++; state.combo++; gainXP(10); playSnd('correct'); }
+  else { state.wrong++; state.streak=0; state.combo=0; gainXP(2); playSnd('wrong'); }
+  const t = todayStr();
+  const rec = dailyLog[t] || {answered:0, correct:0};
+  rec.answered += 1; if(isCorrect) rec.correct += 1;
+  dailyLog[t] = rec; saveLog();
+  const beforeBox = state.box[item.id] || 1;
+  scheduleNext(item.id, isCorrect);
+  const afterBox = state.box[item.id];
+  updateDailyStreak();
+  logAttempt({ ts:new Date().toISOString(), id:item.id, field:item.field, correct:isCorrect, choice:idx, answer:item.a, boxBefore:beforeBox, boxAfter:afterBox, mode:document.getElementById('mode').value });
+  document.getElementById('explain').style.display='block';
+  saveState(); checkBadges(); showStats();
+}
+
+/* Export / Import */
+function download(filename, text){
+  const blob = new Blob([text], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+function toCSV(arr){
+  const header = ["ts","id","field","correct","choice","answer","boxBefore","boxAfter","mode"];
+  const rows = arr.map(o=>header.map(k=> (k in o)? String(o[k]).replace(/"/g,'""') : "" ));
+  return [header.join(","), ...rows.map(r=>r.map(s=>`"${s}"`).join(","))].join("\n");
+}
+
+/* 追加問題 */
+function addQuestion(){
+  const fld = document.getElementById('newField').value;
+  const q = document.getElementById('newQ').value.trim();
+  const ch = document.getElementById('newChoices').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const ans = parseInt(document.getElementById('newAnswer').value||'1')-1;
+  const exp = document.getElementById('newExp').value.trim();
+  if(!q || ch.length<2){ alert('問題文と選択肢（2つ以上）が必要です'); return; }
+  if(ans<0 || ans>=ch.length){ alert('正解番号が不正です'); return; }
+  const id = fld.slice(0,2).toUpperCase()+'-'+Math.random().toString(36).slice(2,8);
+  bank.push({id, field:fld, q, choices:ch, a:ans, exp});
+  saveBank(); renderSelectors();
+  document.getElementById('newQ').value=''; document.getElementById('newChoices').value=''; document.getElementById('newAnswer').value='1'; document.getElementById('newExp').value='';
+  toast('問題を追加しました');
+}
+
+/* タイマー */
+let timer=null, remaining=15*60;
+function renderTimer(){
+  const m = String(Math.floor(remaining/60)).padStart(2,'0');
+  const s = String(remaining%60).padStart(2,'0');
+  document.getElementById('timer').textContent = `${m}:${s}`;
+}
+
+/* 初期化 */
+function init(){
+  loadAll();
+  renderSelectors(); renderBadges(); renderGame();
+  renderTimer(); showStats();
+  // settings
+  document.getElementById('sndEnable').addEventListener('change', (e)=>{ state.sndEnable = e.target.checked; saveState(); playSnd('click'); });
+  document.getElementById('sndVol').addEventListener('input', (e)=>{ state.sndVol = (parseInt(e.target.value)||70)/100; saveState(); });
+  // events
+  document.getElementById('action').addEventListener('click', ()=>{
+    const mode = document.getElementById('mode').value;
+    const fld  = document.getElementById('field').value;
+    const n    = Math.max(1, Math.min(parseInt(document.getElementById('count').value||'10'), 100));
+    prepareQueue(mode, fld, n); nextQuestion(); playSnd('click');
+  });
+  document.getElementById('skip').addEventListener('click', ()=>{ nextQuestion(); playSnd('click'); });
+  document.getElementById('showExp').addEventListener('click', (e)=>{ document.getElementById('explain').style.display='block'; e.target.disabled=true; playSnd('click'); });
+  document.getElementById('dailyTarget').addEventListener('change', showStats);
+  document.getElementById('addQ').addEventListener('click', addQuestion);
+  // export
+  document.getElementById('exportJSON').addEventListener('click', ()=>{
+    const payload = {bank, state, dailyLog, plan, attempts};
+    download('fp3_export.json', JSON.stringify(payload,null,2));
+  });
+  document.getElementById('exportCSV').addEventListener('click', ()=>{
+    download('fp3_attempts.csv', toCSV(attempts));
+  });
+  // import
+  document.getElementById('importBtn').addEventListener('click', ()=> document.getElementById('importFile').click());
+  document.getElementById('importFile').addEventListener('change', (e)=>{
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev)=>{
+      try{
+        const obj = JSON.parse(ev.target.result);
+        if(obj.bank && Array.isArray(obj.bank)) bank = obj.bank;
+        if(obj.state) state = Object.assign(state, obj.state);
+        if(obj.dailyLog) dailyLog = obj.dailyLog;
+        if(obj.attempts) attempts = obj.attempts;
+        saveBank(); saveState(); saveLog(); saveAttempts();
+        renderSelectors(); showStats(); toast('インポート完了');
+      }catch(err){ alert('JSONの形式が不正です'); }
+    };
+    reader.readAsText(file);
+  });
+  // reset
+  document.getElementById('resetStats').addEventListener('click', ()=>{
+    if(!confirm('成績・ログをリセットしますか？')) return;
+    state = {correct:0, wrong:0, streak:0, box:{}, next:{}, level:1, xp:0, coins:0, combo:0, dailyStreak:0, lastActive:"", badges:{rookie:false,tenDay:false,hundredQs:false,noMiss10:false}, sndEnable:true, sndVol:0.7};
+    dailyLog = {}; attempts=[]; saveState(); saveLog(); saveAttempts();
+    renderGame(); renderBadges(); showStats();
+  });
+  // timer
+  document.getElementById('startTimer').addEventListener('click', ()=>{
+    if(timer) return;
+    timer = setInterval(()=>{
+      remaining--; renderTimer();
+      if(remaining<=0){ clearInterval(timer); timer=null; toast('15分セッション終了！'); remaining=0; renderTimer(); }
+    }, 1000);
+  });
+  document.getElementById('resetTimer').addEventListener('click', ()=>{
+    if(timer){ clearInterval(timer); timer=null; }
+    remaining = 15*60; renderTimer();
+  });
+  // PWA
+  if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(console.warn); }
+}
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

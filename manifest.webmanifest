@@ -1,0 +1,13 @@
+{
+  "name": "FP3級 Studyモード v4",
+  "short_name": "FP3 Study",
+  "start_url": "fp3_study_app_v4.html",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [{
+    "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABcUlEQVR4nO2a0Q2CMBBF39mUqR9g9Gk1bJgW0aF6C4v6Qh9w2sK0m5wJxS3L9i0m2JmJr8xw1i0qgq8D8j1k1p0x4m0f3w0GgQwI3w8mA2i7r2lZ8Gqg8oT3a5G3c1m6f0g0k8Cwqk1m6YlQm9n7m5r7C2c9a1m0mWf7v1zQw8g1m6a0Qn8g8b3Cq5gY5f1yqC1b5e2J6S5QJm3g2yK1sUe3F3b0gQK9m1m6a8j3i6b8k9m7Zk8o5FQK1pQwCkN3Q0g+H8Qb4j4m9Jr7h8Qy0w6m2cK7k6h4o2o2wzWvM0Q2x4z3T0a0o6W7pZV0b3b1F1z3mNf3v8Q8K8v7b2G0b0t0oQWw0g3o7QGXw2C9J6nqf4Cw4g7Zz7wqkWJX0p4M1w2Qk1sYV1oQxgH0Yv0l0g6i9Y3s6w2C8g9z6SxGx8nWcQqfTqf+g9dQfR4zq8m0wAAAAASUVORK5CYII=",
+    "sizes": "128x128",
+    "type": "image/png"
+  }]
+}
